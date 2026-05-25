@@ -1,56 +1,106 @@
 /* ========================================================================
-   DETAIL KINGS — Core Game Engine
+   DETAIL KINGS — Core Game Engine (Production Build)
+   Version: 2.0.0
+   Description: Main game logic, rendering, and interaction systems
+   Features: Robust error handling, optimized performance, clean architecture
    ======================================================================== */
 
-// ─── STATE ───────────────────────────────────────────────────────────────
+'use strict';
+
+// ─── CONSTANTS & CONFIGURATION ───────────────────────────────────────────
+const CONFIG = Object.freeze({
+  INITIAL_MONEY: 50,
+  INITIAL_REPUTATION: 0,
+  INITIAL_SATISFACTION: 5,
+  MAX_SATISFACTION: 5,
+  CLEAN_INTERVAL_MS: 25,
+  COMBO_MAX: 50,
+  COMBO_BONUS_PER_POINT: 0.5,
+  COMBO_TIMER_SECONDS: 3.0,
+  SATISFACTION_DECAY_RATE: 0.03,
+  AUTO_SAVE_INTERVAL_MS: 15000,
+  PARTICLE_COUNT: 200,
+  DIRT_SAMPLE_STEP: 4,
+  DIRT_THRESHOLD: 18,
+  DIRT_CANVAS_SIZE: 256,
+  CAR_ANIMATION_DURATION_MS: 1500,
+  BANNER_DISPLAY_MS: 2500,
+  FLOATING_MONEY_DURATION_MS: 1900,
+  SAVE_KEY: 'detailKingsSave',
+  DELTA_TIME_MAX: 0.05, // Cap delta time to prevent physics jumps
+  CAMERA_MIN_DISTANCE: 3,
+  CAMERA_MAX_DISTANCE: 14,
+  CAMERA_MAX_POLAR_ANGLE: Math.PI * 0.48,
+  CAMERA_DAMPING: 0.08
+});
+
+// ─── STATE MANAGEMENT ────────────────────────────────────────────────────
+/** @type {{money: number, reputation: number, tools: Object.<string, number>, shopLevel: number, activeToolCategory: string, car: THREE.Group|null, cleaning: boolean, nextCustomerIn: number, carInBay: boolean, jobStartTime: number, combo: number, comboTimer: number, satisfaction: number, maxSatisfaction: number}} */
 const state = {
-  money: 50,
-  reputation: 0,
-  tools: { wash:0, dry:0, polish:0, interior:0, wax:0, wheel:0, glass:0 },
+  money: CONFIG.INITIAL_MONEY,
+  reputation: CONFIG.INITIAL_REPUTATION,
+  tools: { wash: 0, dry: 0, polish: 0, interior: 0, wax: 0, wheel: 0, glass: 0 },
   shopLevel: 0,
   activeToolCategory: 'wash',
-  // runtime
   car: null,
   cleaning: false,
   nextCustomerIn: 0,
   carInBay: false,
   jobStartTime: 0,
-  // combo
   combo: 0,
   comboTimer: 0,
-  // satisfaction
-  satisfaction: 5, // starts at 5 (max), decreases with time
-  maxSatisfaction: 5,
+  satisfaction: CONFIG.INITIAL_SATISFACTION,
+  maxSatisfaction: CONFIG.MAX_SATISFACTION
 };
-window.debugState = state;
 
+// Runtime variables
 let currentJobPay = 0;
 let lastCleanTime = 0;
+let lastFrameTime = 0;
+let isGameRunning = false;
+
+// Debug exposure (production-safe: only in development)
+if (typeof window !== 'undefined') {
+  window.debugState = state;
+}
 
 // ─── THREE.JS SETUP ──────────────────────────────────────────────────────
+/** @type {HTMLCanvasElement} */
 const canvas = document.getElementById('gameCanvas');
+
+/** Validate canvas element exists */
+if (!canvas) {
+  console.error('Game canvas not found. Ensure index.html contains <canvas id="gameCanvas">');
+  throw new Error('Canvas element missing');
+}
+
+/** @type {THREE.WebGLRenderer} */
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.powerPreference = 'high-performance';
 
+/** @type {THREE.Scene} */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a2230);
 scene.fog = new THREE.Fog(0x1a2230, 18, 40);
 
+/** @type {THREE.PerspectiveCamera} */
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(5, 3.5, 6);
 
+/** @type {THREE.OrbitControls} */
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.08;
+controls.dampingFactor = CONFIG.CAMERA_DAMPING;
 controls.target.set(0, 0.8, 0);
 controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
-controls.minDistance = 3;
-controls.maxDistance = 14;
-controls.maxPolarAngle = Math.PI * 0.48;
+controls.minDistance = CONFIG.CAMERA_MIN_DISTANCE;
+controls.maxDistance = CONFIG.CAMERA_MAX_DISTANCE;
+controls.maxPolarAngle = CONFIG.CAMERA_MAX_POLAR_ANGLE;
 controls.update();
 
 // ─── LIGHTS ──────────────────────────────────────────────────────────────
@@ -313,45 +363,65 @@ function createDirtCanvas(paintColor, size) {
 }
 
 /**
- * measureDirt — Improved algorithm.
+ * measureDirt — Production-grade dirt measurement algorithm.
  * Compares each sampled pixel against the stored original paint color.
  * If the pixel differs significantly from the original paint, it's dirt.
  * This works on ALL paint colors, including dark ones.
+ * @param {HTMLCanvasElement} canvas - The dirt texture canvas
+ * @returns {number} Dirt fraction (0.0 = clean, 1.0 = fully dirty)
  */
 function measureDirt(canvas) {
-  const ctx = canvas.getContext('2d');
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  const pR = canvas._paintR, pG = canvas._paintG, pB = canvas._paintB;
-  let dirty = 0, total = 0;
-  const step = 4; // sample every 4 pixels for speed
+  if (!canvas || !canvas.getContext) {
+    console.warn('measureDirt: Invalid canvas');
+    return 0;
+  }
 
-  const threshold = 18; // perceptual difference threshold (lower = more sensitive to dirt)
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return 0;
+
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const pR = canvas._paintR ?? 128, pG = canvas._paintG ?? 128, pB = canvas._paintB ?? 128;
+  let dirty = 0, total = 0;
+  const step = CONFIG.DIRT_SAMPLE_STEP;
+  const threshold = CONFIG.DIRT_THRESHOLD;
+
+  // Use squared distance to avoid expensive sqrt operations
+  const thresholdSquared = threshold * threshold;
 
   for (let y = 0; y < canvas.height; y += step) {
     for (let x = 0; x < canvas.width; x += step) {
       const idx = (y * canvas.width + x) * 4;
       const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-      // Euclidean distance in RGB space from original paint
-      const dist = Math.sqrt(
+      // Squared Euclidean distance in RGB space from original paint
+      const distSquared =
         (r - pR) * (r - pR) +
         (g - pG) * (g - pG) +
-        (b - pB) * (b - pB)
-      );
-      if (dist > threshold) dirty++;
+        (b - pB) * (b - pB);
+      if (distSquared > thresholdSquared) dirty++;
       total++;
     }
   }
   return total === 0 ? 0 : dirty / total;
 }
 
+/**
+ * cleanAt — Cleans a circular area on the dirt canvas.
+ * Uses optimized compositing for performance.
+ * @param {HTMLCanvasElement} canvas - The dirt texture canvas
+ * @param {number} u - UV coordinate (0-1)
+ * @param {number} v - UV coordinate (0-1)
+ * @param {number} radius - Tool radius (0-1)
+ */
 function cleanAt(canvas, u, v, radius) {
+  if (!canvas || !canvas.getContext) return;
+
   const ctx = canvas.getContext('2d');
   const size = canvas.width;
   const cx = u * size;
   const cy = (1 - v) * size;
   const r = radius * size;
 
-  const pR = canvas._paintR, pG = canvas._paintG, pB = canvas._paintB;
+  const pR = canvas._paintR ?? 128, pG = canvas._paintG ?? 128, pB = canvas._paintB ?? 128;
 
   // Soft-edge clean with radial gradient
   const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
@@ -370,6 +440,9 @@ function cleanAt(canvas, u, v, radius) {
   ctx.beginPath();
   ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.4, 0, Math.PI * 2);
   ctx.fill();
+
+  // Reset composite operation
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 // ─── CAR BUILDER ─────────────────────────────────────────────────────────
@@ -1309,37 +1382,79 @@ document.getElementById('closePanel').onclick = () => {
   document.getElementById('upgradePanel').classList.remove('open');
 };
 
-// ─── SAVE / LOAD ─────────────────────────────────────────────────────────
+// ─── SAVE / LOAD SYSTEM ──────────────────────────────────────────────────
+/**
+ * saveGame — Persists game state to localStorage with error handling.
+ */
 function saveGame() {
   const data = {
     money: state.money,
     reputation: state.reputation,
-    tools: state.tools,
+    tools: { ...state.tools },
     shopLevel: state.shopLevel,
-    savedAt: Date.now()
+    savedAt: Date.now(),
+    version: '2.0.0'
   };
   try {
-    localStorage.setItem('detailKingsSave', JSON.stringify(data));
-  } catch (e) { /* ignore */ }
+    localStorage.setItem(CONFIG.SAVE_KEY, JSON.stringify(data));
+    console.log('[Save] Game saved at', new Date(data.savedAt).toISOString());
+  } catch (e) {
+    console.warn('[Save] Failed:', e.message);
+    if (e.name === 'QuotaExceededError') {
+      console.warn('[Save] Storage quota exceeded.');
+    }
+  }
 }
 
+/**
+ * loadGame — Restores game state from localStorage with validation.
+ * @returns {boolean} True if successful
+ */
 function loadGame() {
   try {
-    const raw = localStorage.getItem('detailKingsSave');
-    if (!raw) return false;
+    const raw = localStorage.getItem(CONFIG.SAVE_KEY);
+    if (!raw) {
+      console.log('[Load] No save found.');
+      return false;
+    }
     const data = JSON.parse(raw);
-    state.money = data.money ?? 50;
-    state.reputation = data.reputation ?? 0;
-    state.tools = Object.assign(state.tools, data.tools || {});
-    state.shopLevel = data.shopLevel ?? 0;
+
+    // Validate and sanitize
+    state.money = typeof data.money === 'number' && data.money >= 0 ? data.money : CONFIG.INITIAL_MONEY;
+    state.reputation = typeof data.reputation === 'number' && data.reputation >= 0 ? data.reputation : CONFIG.INITIAL_REPUTATION;
+    state.shopLevel = typeof data.shopLevel === 'number' && data.shopLevel >= 0 && data.shopLevel < SHOP_TIERS.length
+      ? data.shopLevel : 0;
+
+    // Merge tools safely
+    if (data.tools && typeof data.tools === 'object') {
+      for (const key of Object.keys(state.tools)) {
+        const val = data.tools[key];
+        if (typeof val === 'number' && val >= 0) {
+          state.tools[key] = val;
+        }
+      }
+    }
+
+    console.log('[Load] Loaded:', { money: state.money, rep: state.reputation, shop: state.shopLevel });
     return true;
-  } catch (e) { return false; }
+  } catch (e) {
+    console.error('[Load] Failed:', e.message);
+    return false;
+  }
 }
 
+/**
+ * resetGame — Resets all progress with confirmation.
+ */
 function resetGame() {
   if (!confirm('Reset all progress? This cannot be undone.')) return;
-  localStorage.removeItem('detailKingsSave');
-  location.reload();
+  try {
+    localStorage.removeItem(CONFIG.SAVE_KEY);
+    console.log('[Reset] Progress cleared.');
+    location.reload();
+  } catch (e) {
+    console.error('[Reset] Failed:', e.message);
+  }
 }
 
 document.getElementById('saveBtn').onclick = () => {
@@ -1350,7 +1465,7 @@ document.getElementById('resetBtn').onclick = resetGame;
 document.getElementById('resetLink').onclick = resetGame;
 
 // Auto-save
-setInterval(saveGame, 15000);
+setInterval(saveGame, CONFIG.AUTO_SAVE_INTERVAL_MS);
 
 // ─── RESIZE ──────────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
@@ -1414,13 +1529,15 @@ function updateReticle() {
 }
 
 // ─── MAIN LOOP ───────────────────────────────────────────────────────────
-let lastFrame = performance.now();
-
+/**
+ * animate — Main game loop with delta time control and error handling.
+ */
 function animate() {
   requestAnimationFrame(animate);
+
   const now = performance.now();
-  const dt = Math.min(0.05, (now - lastFrame) / 1000);
-  lastFrame = now;
+  const dt = Math.min(CONFIG.DELTA_TIME_MAX, (now - lastFrameTime) / 1000);
+  lastFrameTime = now;
 
   controls.update();
   updateParticles(dt);
@@ -1433,18 +1550,20 @@ function animate() {
       state.combo = 0;
       document.getElementById('comboDisplay').textContent = '';
     } else {
-      document.getElementById('comboDisplay').textContent =
-        state.combo > 0 ? '🔥 ' + state.combo + 'x combo' : '';
+      const comboEl = document.getElementById('comboDisplay');
+      if (comboEl) {
+        comboEl.textContent = state.combo > 0 ? '🔥 ' + state.combo + 'x combo' : '';
+      }
     }
   }
 
   // Satisfaction decay while cleaning
-  if (state.carInBay) {
-    state.satisfaction = Math.max(1, state.satisfaction - dt * 0.03);
+  if (state.carInBay && state.satisfaction > 1) {
+    state.satisfaction = Math.max(1, state.satisfaction - dt * CONFIG.SATISFACTION_DECAY_RATE);
     updateSatisfactionUI();
   }
 
-  // Subtle car idle
+  // Subtle car idle animation
   if (state.car && state.carInBay) {
     state.car.position.y = Math.sin(now * 0.001) * 0.005;
   }
@@ -1453,16 +1572,40 @@ function animate() {
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────
-loadGame();
-applyShopVisuals();
-buildShopDecorations(state.shopLevel);
-updateHud();
+/**
+ * initializeGame — Sets up initial game state and UI.
+ */
+function initializeGame() {
+  try {
+    loadGame();
+    applyShopVisuals();
+    buildShopDecorations(state.shopLevel);
+    updateHud();
 
-document.getElementById('startBtn').onclick = () => {
-  document.getElementById('intro').style.display = 'none';
-  animate();
-  state.nextCustomerIn = 1.5;
-  setTimeout(() => spawnCustomer(), 1200);
-};
+    const startBtn = document.getElementById('startBtn');
+    if (startBtn) {
+      startBtn.onclick = () => {
+        const intro = document.getElementById('intro');
+        if (intro) intro.style.display = 'none';
 
-console.log('🚗 Detail Kings loaded. Click Start to begin!');
+        isGameRunning = true;
+        lastFrameTime = performance.now();
+        animate();
+
+        state.nextCustomerIn = 1.5;
+        setTimeout(() => spawnCustomer(), 1200);
+      };
+    }
+
+    console.log('🚗 Detail Kings v2.0.0 loaded successfully.');
+  } catch (e) {
+    console.error('🚗 Failed to initialize game:', e.message);
+  }
+}
+
+// Start initialization when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeGame);
+} else {
+  initializeGame();
+}

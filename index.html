@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Detail Kings — 3D Car Detailing Tycoon</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #e8f6ff; user-select: none; }
+  #gameCanvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+  /* ─── HUD ─── */
+  .hud { position: fixed; pointer-events: none; z-index: 10; }
+  .hud > * { pointer-events: auto; }
+
+  #topLeft { top: 16px; left: 16px; }
+  #topLeft .stat { background: rgba(10,18,28,0.78); backdrop-filter: blur(6px);
+    border: 1px solid #00e5ff44; border-radius: 10px; padding: 10px 16px; margin-bottom: 8px;
+    font-size: 15px; display: flex; align-items: center; gap: 10px; min-width: 200px; }
+  #topLeft .stat b { color: #00e5ff; font-size: 18px; }
+  #topLeft .label { opacity: 0.65; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+
+  #topRight { top: 16px; right: 16px; text-align: right; }
+  #topRight .stat { background: rgba(10,18,28,0.78); backdrop-filter: blur(6px);
+    border: 1px solid #ff8a0044; border-radius: 10px; padding: 10px 16px; margin-bottom: 8px;
+    font-size: 14px; }
+  #topRight .stat b { color: #ff8a00; }
+
+  /* ─── Bottom toolbar ─── */
+  #toolbar { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 10; flex-wrap: nowrap; }
+  .tool-slot { width: 76px; height: 90px; background: rgba(10,18,28,0.85);
+    border: 2px solid #00e5ff55; border-radius: 10px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s;
+    backdrop-filter: blur(6px); position: relative; }
+  .tool-slot:hover { border-color: #00e5ff; transform: translateY(-2px); }
+  .tool-slot.active { border-color: #ff8a00; box-shadow: 0 0 20px #ff8a0077; background: rgba(255,138,0,0.15); }
+  .tool-slot .emoji { font-size: 24px; }
+  .tool-slot .name { font-size: 9px; margin-top: 3px; opacity: 0.9; text-align: center; line-height: 1.1; }
+  .tool-slot .tier { font-size: 8px; opacity: 0.5; margin-top: 1px; }
+  .tool-slot .hotkey { position: absolute; top: 3px; right: 5px; font-size: 9px;
+    color: #00e5ff; font-weight: bold; }
+
+  /* ─── Progress bar ─── */
+  #progressWrap { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 360px; height: 18px; background: rgba(0,0,0,0.5); border: 1px solid #00e5ff88;
+    border-radius: 10px; overflow: hidden; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    z-index: 9; }
+  #progressWrap.show { opacity: 1; }
+  #progressBar { height: 100%; width: 0%;
+    background: linear-gradient(90deg, #00e5ff, #ff8a00); transition: width 0.15s; }
+  #progressText { position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: bold; text-shadow: 0 0 4px #000; }
+
+  /* ─── Floating money ─── */
+  .floatMoney { position: fixed; color: #00ff88; font-weight: bold; font-size: 26px;
+    text-shadow: 0 0 8px #00ff8888, 0 2px 4px #000; pointer-events: none;
+    animation: floatUp 1.8s ease-out forwards; z-index: 20; }
+  @keyframes floatUp {
+    0% { transform: translateY(0); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translateY(-80px); opacity: 0; }
+  }
+
+  /* ─── Upgrade panel ─── */
+  #upgradePanel { position: fixed; top: 0; right: -480px; width: 460px; height: 100%;
+    background: linear-gradient(180deg, rgba(8,16,26,0.97), rgba(4,10,18,0.97));
+    border-left: 2px solid #00e5ff55; padding: 24px; overflow-y: auto;
+    transition: right 0.35s ease; z-index: 30; backdrop-filter: blur(10px); }
+  #upgradePanel.open { right: 0; }
+  #upgradePanel h2 { color: #00e5ff; margin-bottom: 4px; font-size: 22px; }
+  #upgradePanel .sub { opacity: 0.6; font-size: 12px; margin-bottom: 20px; }
+  #upgradePanel h3 { color: #ff8a00; margin: 18px 0 8px; font-size: 13px;
+    text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid #ff8a0033; padding-bottom: 6px; }
+  .upgrade-item { background: rgba(0,229,255,0.06); border: 1px solid #00e5ff33;
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; display: flex;
+    justify-content: space-between; align-items: center; gap: 10px; }
+  .upgrade-item.owned { border-color: #00ff8855; background: rgba(0,255,136,0.08); }
+  .upgrade-item.current { border-color: #ff8a00; box-shadow: 0 0 10px #ff8a0044; }
+  .upgrade-info .title { font-weight: bold; font-size: 13px; }
+  .upgrade-info .desc { font-size: 10px; opacity: 0.7; margin-top: 2px; }
+  .upgrade-btn { background: linear-gradient(135deg, #00e5ff, #0099cc); color: #001820;
+    border: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-weight: bold;
+    font-size: 11px; transition: all 0.15s; white-space: nowrap; }
+  .upgrade-btn:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 0 12px #00e5ff88; }
+  .upgrade-btn:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.7); }
+  .upgrade-btn.owned-btn { background: #00ff8833; color: #00ff88; cursor: default; }
+  #closePanel { position: absolute; top: 16px; right: 16px; background: transparent;
+    border: 1px solid #00e5ff55; color: #00e5ff; width: 32px; height: 32px; border-radius: 6px;
+    cursor: pointer; font-size: 16px; }
+  #closePanel:hover { background: #00e5ff22; }
+
+  /* ─── Banner ─── */
+  #banner { position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%) scale(0.8);
+    background: linear-gradient(135deg, rgba(0,229,255,0.95), rgba(255,138,0,0.95));
+    color: #001820; padding: 18px 36px; border-radius: 14px; font-size: 26px; font-weight: bold;
+    opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.18, 1.2, 0.4, 1);
+    z-index: 40; box-shadow: 0 10px 40px rgba(0,229,255,0.4); text-align: center; }
+  #banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #banner small { display: block; font-size: 13px; margin-top: 4px; opacity: 0.8; }
+
+  /* ─── Combo display ─── */
+  #comboDisplay { position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 130px; font-size: 20px; font-weight: bold; color: #ff8a00;
+    text-shadow: 0 0 12px #ff8a0088, 0 2px 4px #000; z-index: 10;
+    pointer-events: none; transition: all 0.2s; }
+
+  /* ─── Stars display ─── */
+  #starsDisplay { position: fixed; top: 86px; left: 50%; transform: translateX(-50%);
+    font-size: 22px; z-index: 10; pointer-events: none; text-shadow: 0 0 8px rgba(0,0,0,0.8); }
+
+  /* ─── Dirt Minimap ─── */
+  #minimapWrap { position: fixed; top: 16px; left: 228px; z-index: 10;
+    background: rgba(10,18,28,0.82); backdrop-filter: blur(6px);
+    border: 1px solid #00e5ff33; border-radius: 10px; padding: 10px 12px;
+    min-width: 180px; opacity: 0; transform: translateY(-8px);
+    transition: opacity 0.35s, transform 0.35s; pointer-events: none; }
+  #minimapWrap.show { opacity: 1; transform: translateY(0); }
+  .minimap-header { font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+    color: #00e5ff88; margin-bottom: 8px; }
+  .minimap-car { display: flex; flex-direction: column; align-items: center; gap: 2px;
+    margin-bottom: 8px; padding: 6px; background: rgba(0,0,0,0.3); border-radius: 6px; }
+  .minimap-row { display: flex; gap: 2px; justify-content: center; }
+  .minimap-cell { width: 28px; height: 14px; border-radius: 3px;
+    transition: background 0.25s; position: relative; cursor: default; }
+  .minimap-cell .cell-label { position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%); font-size: 6px; font-weight: bold;
+    color: rgba(255,255,255,0.85); text-shadow: 0 0 3px rgba(0,0,0,0.8);
+    white-space: nowrap; pointer-events: none; }
+  .minimap-bars { display: flex; flex-direction: column; gap: 3px; }
+  .minimap-bar-row { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+  .minimap-bar-row .bar-label { width: 52px; text-align: right; opacity: 0.7;
+    flex-shrink: 0; font-size: 9px; }
+  .minimap-bar-row .bar-track { flex: 1; height: 6px; background: rgba(0,0,0,0.4);
+    border-radius: 3px; overflow: hidden; }
+  .minimap-bar-row .bar-fill { height: 100%; width: 0%; border-radius: 3px;
+    transition: width 0.25s, background 0.3s; }
+  .minimap-bar-row .bar-pct { width: 26px; text-align: right; font-size: 9px;
+    font-weight: bold; flex-shrink: 0; }
+  .minimap-bar-row .bar-icon { font-size: 10px; width: 16px; text-align: center; flex-shrink: 0; }
+
+  /* ─── Intro ─── */
+  #intro { position: fixed; inset: 0; background: radial-gradient(circle at center, #0a1828, #000);
+    z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 20px; }
+  #intro h1 { font-size: 48px; background: linear-gradient(90deg, #00e5ff, #ff8a00, #00ff88);
+    -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 8px; }
+  #intro .subtitle { color: #00e5ff88; font-size: 14px; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 16px; }
+  #intro p { max-width: 520px; opacity: 0.8; line-height: 1.6; margin-bottom: 20px; font-size: 14px; }
+  #intro button { background: linear-gradient(135deg, #00e5ff, #ff8a00); color: #001820;
+    border: none; padding: 14px 36px; font-size: 18px; font-weight: bold; border-radius: 10px;
+    cursor: pointer; transition: transform 0.15s; }
+  #intro button:hover { transform: scale(1.05); }
+  #intro .hint { margin-top: 24px; font-size: 12px; opacity: 0.5; line-height: 1.7; }
+  #intro .reset-link { color: #ff8a00; cursor: pointer; text-decoration: underline; margin-top: 12px; font-size: 12px; }
+
+  /* ─── Settings ─── */
+  #settings { position: fixed; bottom: 16px; left: 16px; z-index: 10; }
+  #settings button { background: rgba(10,18,28,0.8); border: 1px solid #00e5ff44;
+    color: #00e5ff; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 12px;
+    margin-right: 6px; }
+  #settings button:hover { border-color: #00e5ff; }
+
+  #hintBar { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; opacity: 0.5; z-index: 10; pointer-events: none; text-align: center;
+    white-space: nowrap; }
+
+  /* ─── Scrollbar ─── */
+  #upgradePanel::-webkit-scrollbar { width: 6px; }
+  #upgradePanel::-webkit-scrollbar-track { background: transparent; }
+  #upgradePanel::-webkit-scrollbar-thumb { background: #00e5ff44; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<!-- HUD -->
+<div class="hud" id="topLeft">
+  <div class="stat"><span>💰</span><div><div class="label">Cash</div><b id="moneyDisplay">$50</b></div></div>
+  <div class="stat"><span>⭐</span><div><div class="label">Reputation</div><b id="repDisplay">0</b></div></div>
+  <div class="stat"><span>🏪</span><div><div class="label">Shop</div><b id="shopDisplay">Rusty Garage</b></div></div>
+</div>
+
+<div class="hud" id="topRight">
+  <div class="stat">Next: <b id="nextTimer">--</b>s</div>
+  <div class="stat">Car: <b id="carType">—</b></div>
+  <div class="stat">Pay: <b id="jobPay">$0</b></div>
+</div>
+
+<!-- Stars satisfaction display -->
+<div id="starsDisplay">—</div>
+
+<!-- Dirt Minimap -->
+<div id="minimapWrap">
+  <div class="minimap-header">🗺️ Dirt Map</div>
+  <div class="minimap-car" id="minimapCar"></div>
+  <div class="minimap-bars" id="minimapBars"></div>
+</div>
+
+<!-- Toolbar -->
+<div id="toolbar"></div>
+
+<!-- Combo -->
+<div id="comboDisplay"></div>
+
+<!-- Progress -->
+<div id="progressWrap"><div id="progressBar"></div><div id="progressText">0% clean</div></div>
+
+<!-- Banner -->
+<div id="banner"></div>
+
+<!-- Upgrade Panel -->
+<div id="upgradePanel">
+  <button id="closePanel">✕</button>
+  <h2>⚙️ Upgrade Shop</h2>
+  <div class="sub">TAB to toggle · ESC to close · Invest in your empire</div>
+  <div id="upgradeList"></div>
+</div>
+
+<!-- Intro -->
+<div id="intro">
+  <h1>DETAIL KINGS</h1>
+  <div class="subtitle">🪣 Car Detailing Tycoon 🧼</div>
+  <p>You start with <b>$50</b>, a cheap brush, and a worn microfiber towel.<br>
+     Clean dirty cars, earn cash, buy pro tools, and build a luxury detailing empire from nothing!</p>
+  <button id="startBtn">▶  Start Detailing</button>
+  <div class="hint">
+    Left-click drag to clean · Right-drag to orbit · Scroll to zoom<br>
+    1-7 switch tools · TAB upgrades · ESC close panel · R reset camera
+  </div>
+  <div class="reset-link" id="resetLink">🗑️ Reset saved progress</div>
+</div>
+
+<div id="hintBar">🖱️ LEFT-drag clean · RIGHT-drag orbit · SCROLL zoom · 1-7 tools · TAB upgrades · R reset cam</div>
+
+<div id="settings">
+  <button id="saveBtn">💾 Save</button>
+  <button id="resetBtn">🔄 Reset</button>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<!-- Game scripts -->
+<script src="js/data.js"></script>
+<script src="js/game.js"></script>
+
+</body>
+</html>

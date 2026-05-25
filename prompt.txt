@@ -1,0 +1,142 @@
+Create a realistic mobile car detailing simulator game for PC(creathe the htmls files and css and js, them I use a webview app conversition) with progression, upgrades, and satisfying cleaning gameplay. The game should feel addictive, relaxing, and rewarding like a mix of PowerWash Simulator, Car Mechanic Simulator, and a tycoon/shop upgrade game.
+Game Title:
+“Detail Kings” (placeholder title)
+Core Gameplay:
+The player starts as a beginner car detailer with a tiny garage.
+At the beginning, the player only owns:
+A basic brush
+One microfiber towel
+Very little money
+The player accepts dirty car jobs from customers.
+Cars arrive covered in:
+Mud
+Dust
+Bird poop
+Brake dust
+Interior trash
+Stains
+Water spots
+The player must clean vehicles step-by-step using realistic detailing mechanics.
+Cleaning Systems:
+Include satisfying interactive detailing mechanics:
+Scrubbing dirt manually
+Foam cannon washing
+Pressure washing
+Drying with microfiber towels
+Vacuuming interiors
+Polishing paint
+Wax coating
+Tire shine
+Window cleaning
+Steam cleaning
+Leather treatment
+Progression System:
+The player slowly builds a professional detailing business:
+Earn money from completed jobs
+Buy better tools
+Upgrade the garage/shop
+Unlock luxury customers
+Hire workers later in the game
+Expand the business into a premium detailing studio
+Tool Upgrade System:
+Start with cheap beginner tools and progress into professional equipment.
+Examples:
+Starter:
+Cheap brush
+Old microfiber towel
+Small spray bottle
+Mid-game:
+Foam cannon
+Vacuum
+Pressure washer
+Polisher machine
+Late-game:
+Ceramic coating tools
+Steam detailing machine
+Professional extractor
+Air compressor
+Industrial detailing equipment
+Each tool should:
+Improve cleaning speed
+Improve cleaning quality
+Unlock harder jobs
+Have upgrade levels
+Shop Upgrade System:
+Allow players to upgrade:
+Garage size
+Lighting
+Storage shelves
+Water system
+Waiting area
+Car lift
+Paint correction room
+Premium detailing bay
+Visual Progression:
+The shop should visually transform from:
+Small dirty garage
+to
+Luxury modern detailing studio
+Cars:
+Include many vehicle types:
+Sedans
+SUVs
+Supercars
+Trucks
+Classic cars
+Motorcycles
+Each vehicle should have:
+Different dirt patterns
+Different interior layouts
+Realistic reflections and materials
+Game Features:
+First-person and third-person modes
+Realistic water and foam physics
+Dirt gradually disappears while cleaning
+Satisfying sound design
+Day/night cycle
+Weather system
+Customer reviews and ratings
+Combo bonuses for efficient detailing
+Before/after comparison camera
+Economy:
+Better jobs pay more
+Luxury cars require advanced tools
+Mistakes reduce payment
+Time bonuses increase rewards
+Customization:
+Allow players to customize:
+Worker uniforms
+Garage paint/colors
+Tool skins
+Company logo/name
+Mobile Requirements:
+Optimized for Android devices
+Smooth 60 FPS gameplay
+Touch controls designed for phones
+APK export ready
+Adjustable graphics settings
+Graphics Style:
+Realistic but optimized for mobile
+Highly satisfying cleaning effects
+Wet surfaces should reflect light realistically
+Foam and water should look dynamic
+UI/UX:
+Clean modern interface
+Easy tap-and-drag controls
+Upgrade menus
+Job selection screen
+Tool wheel system
+Technical Requirements:
+Use Unity or Unreal Engine
+Modular upgrade system
+Save/load progression system
+Offline single-player mode
+Optional rewarded ads for bonus money
+Cloud save support
+Monetization:
+Cosmetic-only purchases
+No pay-to-win mechanics
+Optional premium garage skins
+Optional tool cosmetics
+Goal:
+Make the gameplay extremely satisfying, relaxing, and addictive, with strong progression that makes players feel like they are building a real car detailing empire from nothing.
